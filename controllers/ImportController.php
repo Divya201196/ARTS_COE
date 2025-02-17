@@ -1,0 +1,2340 @@
+<?php
+
+namespace app\controllers;
+ini_set('max_execution_time', 0);
+ini_set('memory_limit', '1024M');
+//error_reporting(E_ALL);
+// ini_set('display_errors', TRUE);
+// ini_set('display_startup_errors', TRUE);
+define('EOL', (PHP_SAPI == 'cli') ? PHP_EOL : '<br />');
+
+use Yii;
+use kartik\mpdf\Pdf;
+use ZipArchive;
+
+use yii\web\Controller;
+use yii\web\NotFoundHttpException;
+use yii\filters\VerbFilter;
+use yii\helpers\Url;
+use yii\base\Action;
+
+use PHPExcel;
+use PHPExcel_IOFactory;
+use PHPExcel_Cell;
+use PHPExcel_Shared_Date;
+use kartik\widgets\Growl;
+use yii\i18n\Formatter;
+
+use app\models\Import;
+use app\models\Batch;
+use app\models\Student;
+use app\models\BatDegReg;
+use app\models\Categorytype;
+use app\models\Degree;
+use app\models\Subjects;
+use app\models\SubjectsMapping;
+use app\models\CoeValueSubjects;
+use app\models\CoeValueNominal;
+use app\models\Sub;
+use app\models\Programme;
+use app\models\Regulation;
+use app\components\ConfigConstants;
+use app\components\ConfigUtilities;
+use app\models\ValuationFaculty;
+use app\models\ValuationScrutiny;
+/**
+ * StudentController implements the CRUD actions for Student model.
+ */
+class ImportController extends Controller
+{
+    
+    public function behaviors()
+    {
+        return [
+            'verbs' => [
+                'class' => VerbFilter::className(),
+                'actions' => [
+                    'delete' => ['POST'],
+                ],
+            ],
+        ];
+    }
+
+
+    public function actionIndex()
+    {
+
+        $model = new Import();
+        if(Yii::$app->request->post() && $_POST['Import']['file_name']!="")
+        {           
+            
+            $file_name = $_POST['Import']['file_name'];
+            $uploaded_file = $_FILES["uploaded_file"]["name"];
+            $save_folder = Yii::getAlias('@webroot').'/resources/uploaded/';
+            $saving_file_name = date('d-m-Y-H-i-s')."-".str_replace(" ", "-", $uploaded_file);
+            $save_in_folder = $save_folder.$saving_file_name;
+            //chmod($save_folder, 0777);
+            if(move_uploaded_file($_FILES["uploaded_file"]["tmp_name"], $save_in_folder))
+            {               
+                
+                if($file_name=='student' && !empty($save_in_folder))
+                {
+                    $upload_status = $this->student($save_in_folder);
+                }
+                elseif($file_name=='reuploadstudentdob' && !empty($save_in_folder)){
+                    $upload_status = $this->studentdobupload($save_in_folder);
+                }
+                elseif($file_name=='subject' && !empty($save_in_folder)){
+                    $upload_status = $this->actionSubjectImport($save_in_folder);
+                }
+                elseif($file_name=='papernoupdate' && !empty($save_in_folder)){
+                    $upload_status = $this->actionPaperNoUpdate($save_in_folder);
+                }
+                elseif($file_name=='partnoupdate' && !empty($save_in_folder)){
+                    $upload_status = $this->actionPartNoUpdate($save_in_folder);
+                }
+                elseif ($file_name=='examtimetable' && !empty($save_in_folder)) {
+                    $upload_status = $this->examimport($save_in_folder);
+                }
+                elseif ($file_name=='addexamtimetable' && !empty($save_in_folder)) {
+                    $upload_status = $this->addexamimport($save_in_folder);
+                }
+                elseif ($file_name=='hallimport' && !empty($save_in_folder)) {
+                    $upload_status = $this->hallimport($save_in_folder);
+                }
+                elseif ($file_name=='tc' && !empty($save_in_folder)) {
+                    $upload_status = $this->tcimport($save_in_folder);
+                }
+                elseif ($file_name=='student_photos' && !empty($save_in_folder)) {
+                    $upload_status = $this->studentphotos($save_in_folder);
+                }
+                elseif ($file_name=='degree_import' && !empty($save_in_folder)) {
+                    $upload_status = $this->degreeImport($save_in_folder);
+                }
+                elseif ($file_name=='programme_import' && !empty($save_in_folder)) {
+                    $upload_status = $this->programmeImport($save_in_folder);
+                }
+                elseif ($file_name=='subjectwiseimport' && !empty($save_in_folder)) {
+                    $upload_status = $this->subwiseMarksImport($save_in_folder);
+                }
+                elseif ($file_name=='arts_subjectwiseimport' && !empty($save_in_folder)) {
+                    $upload_status = $this->artsSubwiseMarksImport($save_in_folder);
+                }
+                elseif ($file_name=='subjectwiseciaimport' && !empty($save_in_folder)) {
+                    $upload_status = $this->subwiseCiaMarksImport($save_in_folder);
+                }
+                elseif ($file_name=='transapplication' && !empty($save_in_folder)) {
+                    $upload_status = $this->transRevalApplication($save_in_folder);
+                }
+                elseif ($file_name=='revalapplication' && !empty($save_in_folder)) {
+                    $upload_status = $this->revalApplicationImport($save_in_folder);
+                }
+                elseif ($file_name=='absentimport' && !empty($save_in_folder)) {
+                    $upload_status = $this->absentImport($save_in_folder);
+                }
+                elseif ($file_name=='updateciamarks' && !empty($save_in_folder)) {
+                    $upload_status = $this->ciaMarksUpdate($save_in_folder);
+                }
+                elseif ($file_name=='updateciamarksengg' && !empty($save_in_folder)) {
+                    $upload_status = $this->ciaMarksUpdateEngg($save_in_folder);
+                }
+                elseif ($file_name=='updateesemarksengg' && !empty($save_in_folder)) {
+                    $upload_status = $this->eseMarksUpdateEngg($save_in_folder);
+                }
+                elseif ($file_name=='updateresult' && !empty($save_in_folder)) {
+                    $upload_status = $this->updateStudentResultEngg($save_in_folder);
+                }
+                elseif ($file_name=='updateesemarks' && !empty($save_in_folder)) {
+                    $upload_status = $this->eseMarksUpdate($save_in_folder);
+                }
+                elseif ($file_name=='mandatorymarksimport' && !empty($save_in_folder)) {
+                    $upload_status = $this->mandatoryMarksImport($save_in_folder);
+                }
+                elseif ($file_name=='markimport' && !empty($save_in_folder)) {
+                    $upload_status = $this->marksImport($save_in_folder);
+                }
+                elseif ($file_name=='nominal_import' && !empty($save_in_folder)) {
+                    $upload_status = $this->nominalImport($save_in_folder);
+                }
+                elseif ($file_name=='value_nominal_import' && !empty($save_in_folder)) {
+                    $upload_status = $this->valuenominalImport($save_in_folder);
+                }
+                elseif ($file_name=='value_added_subject_import' && !empty($save_in_folder)) {
+                    $upload_status = $this->actionvalueaddedsubjectImport($save_in_folder);
+                }
+                 elseif ($file_name=='value_mark_import' && !empty($save_in_folder)) {
+                    $upload_status = $this->valuemarkImport($save_in_folder);
+                }
+                  elseif ($file_name=='ciavaluemark' && !empty($save_in_folder)) {
+                    $upload_status = $this->ciavaluemark($save_in_folder);
+                }
+                elseif ($file_name=='updateciamarksvalue' && !empty($save_in_folder)) {
+                    $upload_status = $this->ValueCiaMarksUpdate($save_in_folder);
+                }
+                 elseif ($file_name=='updateesemarksvalue' && !empty($save_in_folder)) {
+                    $upload_status = $this->ValueeseMarksUpdate($save_in_folder);
+                }
+                elseif ($file_name=='update_nominal' && !empty($save_in_folder)) {
+                    $upload_status = $this->nominalUpdate($save_in_folder);
+                }
+                elseif ($file_name=='dummyimport' && !empty($save_in_folder)) {
+                    $upload_status = $this->dummyNumberImport($save_in_folder);
+                }
+                elseif ($file_name=='fees_import' && !empty($save_in_folder)) {
+                    $upload_status = $this->arrearFeesImport($save_in_folder);
+                }
+                elseif ($file_name=='valuation_faculty' && !empty($save_in_folder)) {
+                    $upload_status = $this->valuation_faculty($save_in_folder);
+                }
+                 elseif ($file_name=='valuation_scrutiny' && !empty($save_in_folder)) {
+                    $upload_status = $this->valuation_scrutiny($save_in_folder);
+                }
+                elseif ($file_name=='valuation_faculty_allocation' && !empty($save_in_folder)) {
+                    $upload_status = $this->valuation_faculty_allocation($save_in_folder);
+                }
+                  elseif ($file_name=='absentadd' && !empty($save_in_folder)) {
+                    $upload_status = $this->absentadd($save_in_folder);
+                }
+                 elseif ($file_name=='updateaddexam' && !empty($save_in_folder)) {
+                    $upload_status = $this->updateaddexam($save_in_folder);
+                }
+                 elseif ($file_name=='updateexamtimetable' && !empty($save_in_folder)) {
+                    $upload_status = $this->updateexamimport($save_in_folder);
+                }
+                elseif($file_name=='valuation_adc_faculty_allocation'&&!empty($save_in_folder)) {
+                   $upload_status = $this->valuation_adc_faculty_allocation($save_in_folder);
+                }
+                else{
+                    Yii::$app->ShowFlashMessages->setMsg('Error',"Nothing can do Couldn't found any data in the sheet");
+                    return $this->render('index',[
+                        'model'=>$model,
+                    ]);
+                }                
+            }
+            else
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+                    return $this->render('index',[
+                        'model'=>$model,
+                    ]);
+            }            
+            
+        }
+        else
+        {
+            Yii::$app->ShowFlashMessages->setMsg('Welcome',"Welcome to Import Section");
+            return $this->render('index',[
+                'model'=>$model,
+            ]);
+        }
+        
+    }
+    public function ArtsSubwiseMarksImport($fileLocation)
+    {
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/arts_subwisemarkImport.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',"Marks ".ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_SUBJECT)." Wise Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }
+    } // Marks Insertion Function Ends here
+    public function actionDownloadSample($value)
+    {
+        
+        if($value=='student_photos')
+        {
+            $path = Yii::getAlias('@webroot').'/resources/samples/'.$value.'.zip';     
+        }
+        else if ($value!="") {
+            $path = Yii::getAlias('@webroot').'/resources/samples/'.$value.'.xlsx';      
+        }
+        else
+        {
+            $model = new Import();
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return $this->render('index',[
+                'model'=>$model,
+            ]);
+        }
+        if(file_exists($path)) {
+            return \Yii::$app->response->sendFile($path);
+        }
+        else
+            throw new NotFoundHttpException('The requested file does not exist.');  
+    }
+    public function ArrearFeesImport($fileLocation)
+    {
+       
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/arrear_fees_import.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',"Fees Status Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }      
+       
+
+    } // Degree Insertion Function Ends here 
+    public function getExcelproperties($fileName)
+    {
+        
+        $objReader = PHPExcel_IOFactory::createReaderForFile($fileName);
+        $objReader->setLoadSheetsOnly(array(0));
+        $objReader->setReadDataOnly(true);
+        $objPHPExcel = $objReader->load($fileName);
+        $highestColumm = $objPHPExcel->setActiveSheetIndex(0)->getHighestDataColumn();
+        $highestRow = $objPHPExcel->setActiveSheetIndex(0)->getHighestRow();
+        $sheetData = $objPHPExcel->getActiveSheet()->toArray(null, true, true, true);
+        $getData = $objPHPExcel->setActiveSheetIndex(0)->toArray();
+
+        //unset($sheetData[1]); // Removing the headers         
+        return $sheetData;         
+    }
+
+    public function DummyNumberImport($fileLocation)
+    {
+       
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/dummy_number_import.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_DUMMY)." Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }      
+       
+
+    } // Degree Insertion Function Ends here 
+    public function NominalImport($fileLocation)
+    {
+       
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/nominal_import.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_NOMINAL)." Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }      
+       
+
+    } // Degree Insertion Function Ends here 
+
+public function ValueNominalImport($fileLocation)
+    {
+       
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/value_nominal_import.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_NOMINAL)." Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }      
+       
+
+    } // Degree Insertion Function Ends here 
+
+    public function NominalUpdate($fileLocation)
+    {
+       
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/nominal_update.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_NOMINAL)." Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }      
+       
+
+    } // Degree Insertion Function Ends here 
+
+
+    public function DegreeImport($fileLocation)
+    {
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/degree_import.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_EXAM)." Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }      
+       
+
+    } // Degree Insertion Function Ends here 
+
+    public function ProgrammeImport($fileLocation)
+    {
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       
+
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/programme_import.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_PROGRAMME)." Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }      
+       
+
+    } // Programme Insertion Function Ends here 
+
+    // Subject Wise Marks Starts Her //
+    
+    public function TransRevalApplication($fileLocation)
+    {
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/transrevaluation.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',"Transparency / Revaluation Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }
+    } // Marks Insertion Function Ends here
+
+    public function RevalApplicationImport($fileLocation)
+    {
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/revaluation_import.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',"Revaluation Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }
+    } // Marks Insertion Function Ends here
+
+    public function SubwiseCiaMarksImport($fileLocation)
+    {
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/subwiseciamarkImport.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',"Marks ".ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_SUBJECT)." Wise Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }
+    } // Marks Insertion Function Ends here
+
+
+    public function AbsentImport($fileLocation)
+    {
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/absentImport.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_ABSENT)." Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }
+    } // Marks Insertion Function Ends here
+
+    public function CiaMarksUpdate($fileLocation)
+    {
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/update_sub_wise_cia.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',"Marks ".ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_SUBJECT)." Wise Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }
+    } // Marks Insertion Function Ends here
+
+    public function UpdateSubInfo($fileLocation)
+    {
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/update_sub_info.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',"Marks ".ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_SUBJECT)." Wise Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }
+    } // Marks Insertion Function Ends here
+
+    public function CiaMarksUpdateEngg($fileLocation)
+    {
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/update_sub_wise_cia_engg.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',"Marks ".ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_SUBJECT)." Wise Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }
+    } // Marks Insertion Function Ends here
+    
+    public function EseMarksUpdateEngg($fileLocation)
+    {
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/update_sub_wise_ese_engg.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',"Marks ".ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_SUBJECT)." Wise Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }
+    } // Marks Insertion Function Ends here
+
+    public function UpdateStudentResultEngg($fileLocation)
+    {
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/update_student_result.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',"Result Update Successfully!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }
+    } // Marks Insertion Function Ends here
+
+    public function EseMarksUpdate($fileLocation)
+    {
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/update_sub_wise_ese.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',"Marks ".ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_SUBJECT)." Wise Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }
+    } // Marks Insertion Function Ends here
+
+    public function MandatoryMarksImport($fileLocation)
+    {
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/mandatory_marks.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',"Mandatory Marks Imported Successfully!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }
+    } // Marks Insertion Function Ends here
+
+
+    public function SubwiseMarksImport($fileLocation)
+    {
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/subwisemarkImport.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',"Marks ".ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_SUBJECT)." Wise Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }
+    } // Marks Insertion Function Ends here
+
+
+    // Subject Wise Marks Ends Here //
+
+    public function MarksImport($fileLocation)
+    {
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/markImport.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_EXAM)." Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }
+    } // Marks Insertion Function Ends here 
+
+    public function actionSubjectImport($fileLocation)
+    {
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/subjectImport.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_EXAM)." Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }      
+       
+
+    } // Subject Insertion Function Ends here 
+    public function actionPaperNoUpdate($fileLocation)
+    {
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/update_paper_number.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_EXAM)." Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }      
+       
+
+    } // Subject Insertion Function Ends here 
+
+    public function actionPartNoUpdate($fileLocation)
+    {
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/part_no_update.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_EXAM)." Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }      
+       
+
+    } // Subject Insertion Function Ends here 
+
+    public function Hallimport($fileLocation)
+    {
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       
+       
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/hallimport.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',"Halls Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }      
+       
+
+    } // Hall Import Insertion Function Ends here 
+    
+/* Extracting Function  Starts Her */
+
+/*Read all folder and files*/
+public function ReadAllFolderAndFiles($dir,&$file_list){
+    $dir_and_files = scandir($dir);    
+    foreach($dir_and_files as $df){
+        if($df != '.' && $df != '..'){
+            if(is_file($dir.'/'.$df) && $df!='Thumbs.db'){              
+                $FileExt=$this->getFileExtension($dir.'/'.$df);
+                if(!in_array($FileExt,ConfigUtilities::ValidFileExtension())){
+                    $file_list["INVALID_FILE"][]=$dir.'/'.$df;
+                }else{
+                    $file_list["VALID_FILE"][]=$dir.'/'.$df;
+                }               
+            }
+            if(is_dir($dir.'/'.$df)) $this->ReadAllFolderAndFiles($dir.'/'.$df,$file_list);
+        }
+    }
+    return $file_list;
+}
+
+/*This function will return zip extension file name*/
+public function getFileExtension($file_name){
+    if(trim($file_name)!=''){
+        $ext_part= pathinfo($file_name);
+        $ext = isset($ext_part["extension"])?strtolower($ext_part["extension"]):"";
+        return $ext;
+    }
+}
+
+/*This function will check whether uploaded file is a valid zip file*/
+public function IsValidZipFile($file_path) {
+  if($file_path!=''){
+      $zip = zip_open($file_path);
+      if (is_resource($zip)) {      
+            zip_close($zip); //Close the zip file after checking
+            return true;
+      }else{
+        return false;
+      }
+   }
+}
+/*This function will Delete directory and all files under it recursively*/
+public function RecursiveDeleteDirectory($dir) {
+    if(is_dir($dir)){
+        foreach (scandir($dir) as $file) {
+            if ($file != '.' && $file != '..') {
+                if(is_dir($dir.'/'.$file)) {
+                    $this->RecursiveDeleteDirectory($dir.'/'.$file);
+                }else{
+                    if(is_file($dir.'/'.$file) && file_exists($dir.'/'.$file)){             
+                        unlink($dir.'/'.$file);         
+                    }
+                }            
+            }   
+        }   
+        return rmdir($dir);
+    }
+}
+ 
+/*This function will removes all files from the folder*/
+public function DeleteAllFiles($dir){  
+    $files = glob($dir.'*');// get all file names inside this directory 
+    foreach($files as $file){
+      if(is_file($file))
+        unlink($file); // delete file
+    }
+}
+/*This function will check whether files are valid files*/
+
+    public function Studentphotos($fileLocation)
+    {
+    
+       if (extension_loaded('zip')) {
+            $ShowError=array();
+            $TotalUploadFiles=0;
+            //validation
+        if($this->IsValidZipFile($fileLocation)==false){
+            $ShowError[]="Please upload zip file only. Unable to upload the files";
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to upload the file");
+            return Yii::$app->response->redirect(Url::to(['import/index']));            
+         }
+         
+        if(count($ShowError)<=0){
+            //This should be absoluth folder path where zip file will upload
+            $UploadZipFolderPath=Yii::getAlias('@webroot')."/resources/stu_photos/";     
+            $file_name_remove = preg_replace('/[0-9]+/', '', str_replace('-', '', basename($fileLocation,".".$this->getFileExtension($fileLocation)))); 
+            //$ExtractFolderName=$UploadZipFolderPath.basename($fileLocation,".".$this->getFileExtension($fileLocation)); // Remove the Extracted Folder
+                $ExtractFolderName=$UploadZipFolderPath.$file_name_remove; // Remove Extracted File
+                $file_list=array();
+                     
+                $zip = new ZipArchive;
+                if ($zip->open($fileLocation) === TRUE) {
+                     
+                    $zip->extractTo($UploadZipFolderPath);
+                    $zip->close();
+                    chmod($fileLocation, 0777);
+                    
+                    //unlink($fileLocation);
+                                         
+                    $UploadedFileList=$this->ReadAllFolderAndFiles($UploadZipFolderPath,$file_list);
+                                   
+                    $TotalUploaded=count($UploadedFileList);
+                    if($TotalUploaded>0){                         
+                        //UnSuccess Uploaded Files
+                        $UnSuccessUploaded=isset($UploadedFileList["INVALID_FILE"])?$UploadedFileList["INVALID_FILE"]:[];
+                        $TotalUnSuccess=count($UnSuccessUploaded);
+                        $UnSuccessArr=array();
+                        if($TotalUnSuccess>0){
+                            $UnSuccessUploaded=array_filter($UnSuccessUploaded);
+                            $ct=0;
+                            while($ct<$TotalUnSuccess){
+                               $UnSuccessArr[]=basename($UnSuccessUploaded[$ct]);                              
+                               $ct++;
+                            }
+                             
+                            if(count($UnSuccessArr)>0){
+                                $ShowError[]="<b style='color: #000'>These file(s) </b>". implode(', ',$UnSuccessArr) . " <b style='color: #000;'> are not a valid image file. Remove these files and upload again. </b>";
+                            }
+                        }else{
+                            $SuccessUploaded=isset($UploadedFileList["VALID_FILE"])?$UploadedFileList["VALID_FILE"]:[];
+                            $TotalSuccess=count($SuccessUploaded);
+                            if($TotalSuccess>0){
+                                $ct=0;
+                                $SuccessUploaded=array_filter($SuccessUploaded);
+                                while($ct<$TotalSuccess){
+                                   copy($SuccessUploaded[$ct],$UploadZipFolderPath.basename($SuccessUploaded[$ct]));  
+
+                                   $ct++;
+                                   $TotalUploadFiles++;
+                                }
+                            }
+                        }
+                        if(is_dir($ExtractFolderName))
+                        {
+                            chmod($ExtractFolderName, 0777);
+                            $this->RecursiveDeleteDirectory($ExtractFolderName);
+                            //rmdir($ExtractFolderName);
+                        }
+                        //$this->RecursiveDeleteDirectory($ExtractFolderName);
+                        // if(!is_dir($ExtractFolderName)){
+                        //     DeleteAllFiles($UploadZipFolderPath);                           
+                        // }else{                          
+                        //     RecursiveDeleteDirectory($ExtractFolderName);
+                        // }
+                       
+                    } // If total Uploads count is greater than 0
+                    $_SESSION['importResults'] = ['ShowError'=>$ShowError,'TotalUploadFiles'=>$TotalUploadFiles,'result_for'=>'photos']; 
+                    Yii::$app->ShowFlashMessages->setMsg('Success',"Photos Extracted Successfully");
+                    return Yii::$app->response->redirect(Url::to(['import/index']));                  
+                }            
+        } // Check if there is no errors if conditions still comes inside 
+        
+
+    }else{
+
+        $ShowError[]="Zip extension is not loaded.";
+        unlink($fileLocation);
+        Yii::$app->ShowFlashMessages->setMsg('Error',"Not a Valid Extension");
+        return Yii::$app->response->redirect(Url::to(['import/index']));
+    }     
+       
+       
+
+    } // Student Photos Imported Successfully!!!
+    
+/* Extraction Functions Ends Her */
+
+    public function Examimport($fileLocation)
+    {
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+        
+
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/examimport.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_EXAM)." Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }      
+       
+
+    } // Exam Insertion Function Ends here 
+    public function Student($fileLocation)
+    {
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = date("Y-m-d H:i:s");
+            
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);      
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/studentImport.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_STUDENT)." Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+            
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       }      
+       
+
+    } // Subject Insertion Function Ends here
+
+    public function Studentdobupload($fileLocation)
+    {
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = date("Y-m-d H:i:s");
+            
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);      
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/update_stu_dob.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_STUDENT)." Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+            
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       }      
+       
+
+    } // Student DOB Insertion Function Ends here
+
+     public function ValueMarkImport($fileLocation)
+    {
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/value_mark_import.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',"Marks ".ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_SUBJECT)." Wise Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }
+    } // Marks Insertion Function Ends here
+
+    public function CiaValueMark($fileLocation)
+    {
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/ciavaluemark.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',"Marks ".ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_SUBJECT)." Wise Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }
+    } // Marks Insertion Function Ends here
+
+
+     public function actionValueAddedSubjectImport($fileLocation)
+    {
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/value_added_subject_import.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_EXAM)." Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }      
+       
+
+    } // Subject Insertion Function Ends here 
+
+    protected function valueReplace($value, $arrayData)
+    {
+        if(empty($value) || empty($arrayData)) {
+            return null;
+        } else {
+            $key = array_search(strtolower($value), array_map('strtolower', $arrayData));
+            return ($key) ? $key : NULL;
+        }    
+    }
+    
+    public function ValueCiaMarksUpdate($fileLocation)
+    {
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/update_sub_wise_cia_value.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',"Marks ".ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_SUBJECT)." Wise Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }
+    } // Marks Insertion Function Ends here
+
+
+    public function ValueEseMarksUpdate($fileLocation)
+    {
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/update_sub_wise_ese_value.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',"Marks ".ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_SUBJECT)." Wise Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }
+    } // Marks Insertion Function Ends here
+
+    public function Valuation_faculty_allocation($fileLocation)
+    {
+       
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/valuation_faculty_allocation.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_DUMMY)." Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }      
+       
+
+    }
+
+      public function Valuation_faculty($fileLocation)
+    {
+       
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/valuation_faculty_import.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_DUMMY)." Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }      
+       
+
+    }
+
+
+    public function Valuation_scrutiny($fileLocation)
+    {
+       
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/valuation_scrutiny_import.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_DUMMY)." Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }      
+       
+
+    } 
+
+     public function AddExamimport($fileLocation)
+    {
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+        
+
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/addexamimport.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_EXAM)." Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }      
+       
+
+    } 
+
+    public function AbsentAdd($fileLocation)
+    {
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/absentadd.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_ABSENT)." Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }
+    } 
+
+
+        public function Updateaddexam($fileLocation)
+    {
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+        
+
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/updateaddexam.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_EXAM)." Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }      
+       
+
+    }
+
+
+  public function Updateexamimport($fileLocation)
+    {
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+        
+
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/updateexamimport.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_EXAM)." Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }      
+       
+
+    }
+
+
+ public function Valuation_adc_faculty_allocation($fileLocation)
+    {
+       
+       $model = new Import();
+       $sheetData = $this->getExcelproperties($fileLocation);
+       if(!empty($sheetData))
+       {
+            $dispResults = []; 
+            $totalSuccess = 0;
+            $importResults = [];
+            $created_by = Yii::$app->user->getId();
+            $created_at = $updated = date("Y-m-d H:i:s");
+
+            function array_filter_recursive( array $array, callable $callback = null ) {
+                $array = is_callable( $callback ) ? array_filter( $array, $callback ) : array_filter($array, function($v){
+                    return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+                });
+                foreach ( $array as &$value ) {
+                    if ( is_array( $value )) {
+                        $value = call_user_func( __FUNCTION__, $value, $callback );
+                    }
+                }
+             
+                return $array;
+            }
+            $sheetData = array_filter_recursive($sheetData);
+            
+            if(empty($sheetData) || count($sheetData)<2)
+            {
+                Yii::$app->ShowFlashMessages->setMsg('Error',"Oooops You are trying to upload the empty file <br />");
+                unlink($fileLocation);
+                return Yii::$app->response->redirect(Url::to(['import/index']));
+            }
+            require(Yii::getAlias('@webroot')."/includes/valuation_adc_faculty_allocation.php");
+            Yii::$app->ShowFlashMessages->setMsg('Success',ConfigUtilities::getConfigValue(ConfigConstants::CONFIG_DUMMY)." Import Process Success!!<br />");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+           
+       } // Not Empty of Sheet Ends Here 
+       else {
+
+            Yii::$app->ShowFlashMessages->setMsg('Error',"Unable to Resolve your Submission.");
+            return Yii::$app->response->redirect(Url::to(['import/index']));
+            
+       }      
+       
+
+    }       
+
+}
