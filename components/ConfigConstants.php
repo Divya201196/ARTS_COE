@@ -1,0 +1,51 @@
+<?php
+namespace app\components;
+
+class ConfigConstants
+{
+	const CONFIG_USER    			= 'coe.user.name',
+		  CONFIG_DEGREE          	= 'coe.degree.name',
+		  CONFIG_NAME           	= "coe.config.name",
+		  CONFIG_BATCH          	= "coe.batch.name",
+		  CONFIG_STUDENT        	= "coe.student.name",
+		  CONFIG_EXAM           	= "coe.exam.name",
+		  CONFIG_SECTION        	= "coe.section.name", 
+		  CONFIG_BATCH_LOCKING_START = "coe.batch.locking.start",
+		  CONFIG_BATCH_LOCKING_END  = "coe.batch.locking.end",
+		  CONFIG_ABSENT         	= "coe.absent.name",
+		  CONFIG_ABSENT_LOCKING    	= "coe.absent.locking.duration",
+		  CONFIG_REPORT         	= "coe.report.name",		  
+		  CONFIG_NOMINAL        	= "coe.nominal.name",
+		  CONFIG_CATEGORY			= "coe.category.name",
+		  CONFIG_CATEGORY_TYPE		= 'coe.category.type',
+	      CONFIG_ENABLE_NOMINAL     = "coe.nominal.enable.status",	  
+          CONFIG_SUBJECT            = "coe.subject.name",
+       	  CONFIG_PROGRAMME          = "coe.programme.name",
+ 	      CONFIG_SUBJECT_TYPE       = "coe.subjecttype.name",
+	      CONFIG_PROGRAMME_TYPE     = "coe.programmetype.name",
+	      CONFIG_PAPER_TYPE         = "coe.papertype.name",
+	      CONFIG_MIGRATE_STATUS		= "coe.migrate.status",      
+		  CONFIG_ADMISSION_CATEGORY	= 'coe.admission.category',
+		  CONFIG_STUDENT_CATEGORY	= 'coe.admission.status',
+	      CONFIG_BISEM				= "coe.exam.bisem.name",	     
+	      CONFIG_TRISEM				= "coe.exam.trisem.name",
+		  CONFIG_EXAM_TERM			= "coe.exam.term.name",
+		  CONFIG_EXAM_TYPE			= "coe.exam.type.name",
+		  CONFIG_HALLTYPE			= "coe.galley.hall.type",
+		  CONFIG_EXAM_SESSION		= "coe.exam.session.name",
+		  CONFIG_ABSENT_TYPE		= "coe.absent.type.name",
+		  CONFIG_ABSENT_STATUS		= "coe.absent.percentage",
+		  CONFIG_GALLEY_HALL_COLUMN_SIZE = 'coe.galley.hall.column.size',
+		  CONFIG_DUMMY 		= 'coe.dummy.number.name',
+		  CONFIG_MARK_TYPE			=  "coe.mark.type.name",
+		  CONFIG_CIA_ZEO			=  "coe.cia.make.zero",
+		  CONFIG_ELECTIVE_WAIVER	=  "coe.elective.waiver.count",
+		  CONFIG_MAX_REVAL_SUBJECTS	=  "coe.max.reval.subjects",
+		  CONFIG_REVAL_LOCKING    	= "coe.reval.locking.duration",
+		  CONFIG_MAX_EXAM_CONDUTION    	= "coe.max.exam.condution",
+		  CONFIG_MAX_PRAC_EXAM_CONDUTION    	= "coe.max.prac.arr.subs",
+		  CONFIG_MAX_EXAM_CONDUTION_PG    	= "coe.max.exam.condution.pg"; // 4 years of attempt for PG
+}
+
+?>
+
