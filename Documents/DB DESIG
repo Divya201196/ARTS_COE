@@ -1,0 +1,78 @@
+﻿				DB Design for NEW COE
+
+DB Design for Degree:
+
+1. Dept Id 		: Auto Increment, Primary Key, Not Null
+2. Department Code 	: BE (Varchar 25)
+3. Department Name 	: Bachelor of Engineering (Varchar 255)
+4. Created At 		: Time of creation (datetime)
+5. Created By 		: Admin / Users (Foreign Key with users table)
+6. Updated At 		: Time of Update (datetime)
+7. Updated By 		: Admin / User (Foreign Key with users table)
+
+
+Course DB Design : 
+
+1. Course Id 		: Auto Increment, Primary Key, Not Null
+2. Course Code 		: U10 (Varchar 25)
+3. Course Name		: BECSE (Varchar 45)
+4. Graduation		: Varchar(45) 
+5. Created Time	 	: Datetime 
+6. Updated Time	 	: Datetime 
+7. Created By	 	: Admin / User (Foreign Key with users table)
+8. Updated By	 	: Admin / User (Foreign Key with users table)
+
+
+Batch Db Design
+
+1. Batch Id		: Auto ,Primary, Not Null
+2. Batch Course Id	: Foreign Key from Courses
+3. Batch Name		: Varchar (10)
+4. Created		: Datetime
+5. Updated		: Datetime
+6. Created By		: Admin / User (Foreign Key with users table)
+7. Updated By		: Admin / User (Foreign Key with users table)
+
+
+Mapping Table for Batch & Course & Department
+
+1. Mapping id		: Auto, Primary, Not null
+2. Department Id		: Foreign Key from Departments
+3. Course Id		: Foreign Key from Courses 
+4. Batch Id		: Foreign Key from Batches
+5. Section Name		: Varchar(10)
+6. Status			: Active / Inactive INT OR VARCHAR
+7. Created		: Datetime
+8. Updated		: Datetime
+9. Created By		: Admin / User (Foreign Key with users table)
+10. Updated By		: Admin / User (Foreign Key with users table)
+11. Group Unique of (Dept id,Course Id,Batch Id,Section Name)
+
+Subject DB Design : 
+
+1. Subject Id 		: Auto,Not Null,Primary
+2. Reg Year		: Varchar(10)
+3. Mapping Id		: Foreign key from Mapping table Course & Department & Batche Table 
+4. Semester		: INT
+5. Subject Code		: Varchar(45)
+6. Subject Name		: Varchar(255)
+7. Paper No		: INT
+8. Paper Type		: varchar(255)
+9. Subject Type		: varchar(255)
+10. Cia Minimum		: INT
+11. Cia Maximum		: INT
+12. Ese Minimum		: INT
+13. Ese Maximum		: INT
+14. Total Minimum	: INT
+15. End Semester Marks	: INT
+16. Status			: INT
+17. Credit Points		: INT
+18. Created Time		: Datetime
+19. Created By		: Admin / User (Foreign Key with users table)
+20. Update Time		: Datetime
+21. Updated By		: Admin / User (Foreign Key with users table)
+22. Group unique of mapping id,subject code,semester
+	
+
+
+
