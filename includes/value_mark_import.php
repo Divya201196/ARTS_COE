@@ -250,6 +250,8 @@ foreach($sheetData as $k => $line)
 
                                 $total_marks = round(((0+$convert_ese_marks)/($subject_details['ESE_max']+0) )*100); 
                                 $arts_college_grade = round(( (0+$convert_ese_marks)/$final_sub_total)*10,1);
+
+                                print_r($arts_college_grade);exit;
                               }
                               else if($subject_details['ESE_max']>100 )
                               {
